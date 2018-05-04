@@ -176,4 +176,13 @@ class Intepreter():
                 return Number(float(token))
             except ValueError:
                 return Symbol(token)
+    
+    def repl(self, prompt='>'):
+        while True:
+            val = self.eval(self.parse(input(prompt)))
+            if val:
+                print(val)
+
+
+
 

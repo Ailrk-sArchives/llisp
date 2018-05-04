@@ -1,7 +1,7 @@
 import llsip
 
-code = '(define p 3) (print p)(define r 8) (print (* pi r))'
+code = '(define r 10)  (print (* pi (* r r)))'
+
 intepreter = llsip.Intepreter()
 
-exp = intepreter.parse(code)
-solution = intepreter.eval(intepreter.parse(code))
+intepreter.repl()
