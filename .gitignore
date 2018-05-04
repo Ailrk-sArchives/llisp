@@ -3,7 +3,7 @@
 
 ### mail_list anf text.txt
 *.txt
-*.swp
+.*.swp
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
