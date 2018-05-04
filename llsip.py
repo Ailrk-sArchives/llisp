@@ -1,7 +1,7 @@
 import math, operator 
 from typing import Union
 
-#import pdb
+import pdb
 
 class Exp(object):
     pass
@@ -106,7 +106,7 @@ class Intepreter():
 
     def __tokenizer(self, source_code: str) -> list:
         """ create a list of tokens """
-        source_code = '(' + source_code + ')'
+        source_code = '(begin' + source_code + ')'
         return source_code.replace('(', ' ( ').replace(')', ' ) ').split()
 
     def parse(self, source_code: str) -> Exp:
@@ -139,22 +139,31 @@ class Intepreter():
     def eval(self, x: Exp) -> Exp:
         """ eval """
         # variable reference
-        if isinstance(x, Symbol):
-            return self.env[x.val]
-
-        elif isinstance(x, Number):
+        if isinstance(x, Symbol) and x.val != 'define' and x.val != 'if':
+            try:
+                return self.env[x.val]
+            except KeyError:
+                print('Unbounded variable ' + x.val)
+        
+        # constant number
+        elif not isinstance(x, List):
             return x.val
 
-        elif isinstance(x[0], Atom):
+        # condition
+        elif x[0].val == 'if':
+            (_, test, conseq, alt) = x
+            exp = (conseq if self.eval(test)  else alt)
+            return self.eval(exp)
 
-            elif x[0] == 'if':
-                (_, test, conseq, alt) = x
-                exp = (conseq if self.eval(test)  else alt)
-                return self.eval(exp)
+        elif x[0].val == 'define':
+            (_, symbol, exp) = x
+            self.env[symbol.val] = self.eval(exp)
 
-            elif x[0] == 'define':
-                (_, symbol, exp) = x
-                self.env[symbol] = eval(exp)
+        # procedure call
+        else:
+            proc = self.eval(x[0])
+            args = List(self.eval(arg) for arg in x[1:])
+            return proc(*args)
 
 
     @staticmethod
