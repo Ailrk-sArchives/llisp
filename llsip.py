@@ -19,13 +19,10 @@ class List(list, Exp):
 
 class Atom(Exp):
     val = None
-
     def __init__(self, value: Union[str, int, float]):
         self.val = value
-
     def __repr__(self):
        return  '<Atom ' + str(self.val) + '> '
-
     def __str__(self):
        return  '<Atom ' + str(self.val) + '> '
 
@@ -34,10 +31,18 @@ class Atom(Exp):
 class Symbol(Atom):
     def __init__(self, value: str):
         super().__init__(value)
+    def __repr__(self):
+       return  '<Symbol ' + str(self.val) + '> '
+    def __str__(self):
+       return  '<Symbol ' + str(self.val) + '> '
 
 class Number(Atom):
     def __init__(self, value: Union[int, float]):
         super().__init__(value)
+    def __repr__(self):
+       return  '<Numer ' + str(self.val) + '> '
+    def __str__(self):
+       return  '<Number ' + str(self.val) + '> '
 
 
 class Env(dict):
@@ -49,8 +54,9 @@ class Env(dict):
     def __keytransform__(self, key):
         return str(key)
 
-    def __init__(self, env_callback):
-        self.update(env_callback())
+    def __init__(self, parms=(), args=(), outer_env=None):
+        self.update(zip(parms, args))
+        self.outer_env = outer
 
     def __getitem__(self, key):
         return dict.__getitem__(self, self.__keytransform__(key))
@@ -64,43 +70,56 @@ class Env(dict):
     def __contains__(self, key):
         return dict.__contains__(self, self.__keytransform__(key))
 
-class Intepreter():
+    def find(self, var):
+        return self if (var in self) else self.outer.find(var)
+
+class Procedure(object):
+    """ customizable procedure """
+    def __init__(self, parms, body, env):
+        self.parms, self.body, self.env = parms, body, env
+
+    def __call__(self, *args):
+        return self.body, Env(self.parms, args, self.env)
+
+class Intepreter(object):
     env = None
 
-    def __init__(self, create_env_callback=None):
-        if create_env_callback: self.env = Env(create_env_callback)
-        else:                   self.env = Env(self.__create_default_env)
+    def __init__(self, create_global_env=None):
+        if create_global_env: self.env = Env(create_global_env())
+        else:                   self.env = Env(self.__create_std_global_env())
 
-    def __create_default_env(self) -> dict:
+    def __create_std_global_env(self) -> dict:
+        """ to create standard global env """
         env = {}
         env.update(vars(math))
         env.update({
             '+': operator.add, '-': operator.sub,
             '*':operator.mul, '/':operator.truediv,
             '>':operator.gt, '<':operator.lt,
-            '>=':operator.ge, '<=':operator.le, '=':operator.eq,
-            'abs': abs,
-            'append': operator.add,
-            'begin': lambda *x: x[-1],
-            'car':  lambda x: x[0],
-            'cdr':  lambda x: x[1:],
-            'cons': lambda x, y: [x] + y,
-            'eq?':  operator.is_,
-            'expt': pow,
-            'equal?':   operator.eq,
-            'length':   len,
-            'list': lambda *x: List(x),
-            'list?':lambda x: isinstance(x, List),
-            'map':  map,
-            'max':  max,
-            'min':  min,
-            'not':  operator.not_,
-            'null?': lambda x: x==[],
-            'number?': lambda x: isinstance(x, Number),
-            'print': print,
-            'procedure?': callable,
-            'round': round,
-            'symbol?': lambda x: isinstance(x, Symbol),
+            '>=':operator.ge, '<=':operator.le,
+            '=':operator.eq,
+            'abs':          abs,
+            'append':       operator.add,
+            'begin':        lambda *x: x[-1],
+            'car':          lambda x: x[0],
+            'cdr':          lambda x: x[1:],
+            'cons':         lambda x, y: [x] + y,
+            'eq?':          operator.is_,
+            'expt':         pow,
+            'equal?':       operator.eq,
+            'length':       len,
+            'list':         lambda *x: List(x),
+            'list?':        lambda x: isinstance(x, List),
+            'map':          map,
+            'max':          max,
+            'min':          min,
+            'not':          operator.not_,
+            'null?':        lambda x: x==[],
+            'number?':      lambda x: isinstance(x, Number),
+            'print':        print,
+            'procedure?':   callable,
+            'round':        round,
+            'symbol?':      lambda x: isinstance(x, Symbol),
             })
         return env
 
@@ -136,12 +155,12 @@ class Intepreter():
         else:
             return Intepreter.atom(token)
 
-    def eval(self, x: Exp) -> Exp:
+    def eval(self, x: Exp, env=self.env) -> Exp:
         """ eval """
         # variable reference
         if isinstance(x, Symbol) and x.val != 'define' and x.val != 'if':
             try:
-                return self.env[x.val]
+                return env[x.val]
             except KeyError:
                 print('Unbounded variable ' + x.val)
         
@@ -149,15 +168,27 @@ class Intepreter():
         elif not isinstance(x, List):
             return x.val
 
+        op, *args = x
+        if op == 'qoute':
+            pass
+
         # condition
-        elif x[0].val == 'if':
+        elif op == 'if':
             (_, test, conseq, alt) = x
             exp = (conseq if self.eval(test)  else alt)
             return self.eval(exp)
 
-        elif x[0].val == 'define':
+        elif op == 'define':
             (_, symbol, exp) = x
-            self.env[symbol.val] = self.eval(exp)
+            env[symbol.val] = self.eval(exp)
+
+        elif op == 'set!':
+            (symbol, exp) = args
+            env.find(symbol.val)[symbol.val] = self.eval(exp, env)
+
+        elif op == 'lambda':
+            (parms, body) = args
+            return self.eval(Procedure(parms, body, env))
 
         # procedure call
         else:
@@ -178,11 +209,8 @@ class Intepreter():
                 return Symbol(token)
     
     def repl(self, prompt='>'):
+        """ repl interactive shell"""
         while True:
             val = self.eval(self.parse(input(prompt)))
             if val:
                 print(val)
-
-
-
-
