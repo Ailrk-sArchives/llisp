@@ -1,7 +1,5 @@
-import math, operator 
+import math, operator , sys
 from typing import Union
-
-import pdb
 
 class Exp(object):
     pass
@@ -56,48 +54,56 @@ class Env(dict):
 
     def __init__(self, parms=(), args=(), outer_env=None):
         self.update(zip(parms, args))
-        self.outer_env = outer
-
-    def __getitem__(self, key):
-        return dict.__getitem__(self, self.__keytransform__(key))
-
-    def __setitem__(self, key, value):
-        return dict.__setitem__(self, self.__keytransform__(key), value)
-
-    def __delitem__(self, key):
-        return dict.__delitem__(self, self.__keytransform__(key))
-
-    def __contains__(self, key):
-        return dict.__contains__(self, self.__keytransform__(key))
+        self.outer_env = outer_env
 
     def find(self, var):
-        return self if (var in self) else self.outer.find(var)
+        # find from local scope to outer scope until reach global scope
+        try:    
+            return self if (var in self) else self.outer_env.find(var)
+        except BaseException:
+            print('unbounded item in all environments')
+            sys.exit(1)
 
 class Procedure(object):
     """ customizable procedure """
+
     def __init__(self, parms, body, env):
         self.parms, self.body, self.env = parms, body, env
+    
+    # create a new Env with self.env as outer. bind self.parms with args for
+    # the sub Env.
 
+    # the  retur value is the parameters for Intepreter.eval to evaluate
     def __call__(self, *args):
-        return self.body, Env(self.parms, args, self.env)
+        # create a new procedure, generate a local scope
+        return self.body, Env(tuple(map(lambda x:x.val, self.parms)), args, self.env)
 
 class Intepreter(object):
     env = None
+    keywords = ['if', 'define', 'lambda', 'set!', 'quote']
 
     def __init__(self, create_global_env=None):
-        if create_global_env: self.env = Env(create_global_env())
-        else:                   self.env = Env(self.__create_std_global_env())
+        if create_global_env:
+            self.env = Env()
+            self.env.update(create_global_env())
+        else:
+            self.env = Env()
+            self.env.update(self.__create_std_global_env())
 
     def __create_std_global_env(self) -> dict:
         """ to create standard global env """
         env = {}
         env.update(vars(math))
         env.update({
-            '+': operator.add, '-': operator.sub,
-            '*':operator.mul, '/':operator.truediv,
-            '>':operator.gt, '<':operator.lt,
-            '>=':operator.ge, '<=':operator.le,
-            '=':operator.eq,
+            '+':            operator.add,
+            '-':            operator.sub,
+            '*':            operator.mul, 
+            '/':            operator.truediv,
+            '>':            operator.gt,
+            '<':            operator.lt,
+            '>=':           operator.ge,
+            '<=':           operator.le,
+            '=':            operator.eq,
             'abs':          abs,
             'append':       operator.add,
             'begin':        lambda *x: x[-1],
@@ -155,12 +161,16 @@ class Intepreter(object):
         else:
             return Intepreter.atom(token)
 
-    def eval(self, x: Exp, env=self.env) -> Exp:
+    def eval(self, x: Exp, env:Env=None) -> Exp:
         """ eval """
+        # set env
+        if not env: env = self.env
+
+        # parse atom ===============
         # variable reference
-        if isinstance(x, Symbol) and x.val != 'define' and x.val != 'if':
+        if isinstance(x, Symbol):
             try:
-                return env[x.val]
+                return env.find(x.val)[x.val]
             except KeyError:
                 print('Unbounded variable ' + x.val)
         
@@ -168,34 +178,42 @@ class Intepreter(object):
         elif not isinstance(x, List):
             return x.val
 
+        # parse list =================
         op, *args = x
-        if op == 'qoute':
-            pass
+        if op.val == 'qoute':
+            return args[0].val
 
         # condition
-        elif op == 'if':
-            (_, test, conseq, alt) = x
-            exp = (conseq if self.eval(test)  else alt)
-            return self.eval(exp)
+        elif op.val == 'if':
+            (test, conseq, alt) = args
+            exp = (conseq if self.eval(test, env)  else alt)
+            return self.eval(exp, env)
 
-        elif op == 'define':
-            (_, symbol, exp) = x
-            env[symbol.val] = self.eval(exp)
+        elif op.val == 'define':
+            (symbol, exp) = args
+            env[symbol.val] = self.eval(exp, env)
 
-        elif op == 'set!':
+        elif op.val == 'set!':
             (symbol, exp) = args
             env.find(symbol.val)[symbol.val] = self.eval(exp, env)
 
-        elif op == 'lambda':
+        # generate procedure
+        elif op.val == 'lambda':
             (parms, body) = args
-            return self.eval(Procedure(parms, body, env))
+            return Procedure(parms, body, env)
 
         # procedure call
         else:
-            proc = self.eval(x[0])
-            args = List(self.eval(arg) for arg in x[1:])
-            return proc(*args)
+            proc = self.eval(op, env)
 
+            vals = List(self.eval(arg, env) for arg in args)
+            
+            # user defined procedures. proc(*vals) return the argument for eval
+            if isinstance(self.env.find(op.val)[op.val], Procedure):
+                sub_exp, sub_env = proc(*vals)
+                return self.eval(sub_exp, sub_env)
+            # build-in procedures
+            return proc(*vals)
 
     @staticmethod
     def atom(token: str) -> Atom:
@@ -211,6 +229,9 @@ class Intepreter(object):
     def repl(self, prompt='>'):
         """ repl interactive shell"""
         while True:
-            val = self.eval(self.parse(input(prompt)))
+            typein = input(prompt)
+            if typein in ['q', 'exit', 'quit']: sys.exit(0)
+
+            val = self.eval(self.parse(typein))
             if val:
                 print(val)
