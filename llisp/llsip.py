@@ -1,46 +1,5 @@
 import math, operator , sys
-from typing import Union
-
-class Exp(object):
-    pass
-
-""" Exp = (List, Atom)"""
-class List(list, Exp):
-
-    def __repr__(self):
-        return '(List ' + \
-        ''.join([str(self.__getitem__(i)) for i in range(0, self.__len__())]) + ') '
-
-    def __str__(self):
-        return '(List ' + \
-        ''.join([str(self.__getitem__(i)) for i in range(0, self.__len__())]) + ') ' 
-
-class Atom(Exp):
-    val = None
-    def __init__(self, value: Union[str, int, float]):
-        self.val = value
-    def __repr__(self):
-       return  '<Atom ' + str(self.val) + '> '
-    def __str__(self):
-       return  '<Atom ' + str(self.val) + '> '
-
-
-""" Atom = (Symbol, Number)"""
-class Symbol(Atom):
-    def __init__(self, value: str):
-        super().__init__(value)
-    def __repr__(self):
-       return  '<Symbol ' + str(self.val) + '> '
-    def __str__(self):
-       return  '<Symbol ' + str(self.val) + '> '
-
-class Number(Atom):
-    def __init__(self, value: Union[int, float]):
-        super().__init__(value)
-    def __repr__(self):
-       return  '<Numer ' + str(self.val) + '> '
-    def __str__(self):
-       return  '<Number ' + str(self.val) + '> '
+from expressions import *
 
 
 class Env(dict):
@@ -60,9 +19,9 @@ class Env(dict):
         # find from local scope to outer scope until reach global scope
         try:    
             return self if (var in self) else self.outer_env.find(var)
+
         except BaseException:
-            print('unbounded item in all environments')
-            sys.exit(1)
+            pass
 
 class Procedure(object):
     """ customizable procedure """
@@ -86,12 +45,14 @@ class Intepreter(object):
         if create_global_env:
             self.env = Env()
             self.env.update(create_global_env())
+
         else:
             self.env = Env()
             self.env.update(self.__create_std_global_env())
 
     def __create_std_global_env(self) -> dict:
         """ to create standard global env """
+
         env = {}
         env.update(vars(math))
         env.update({
@@ -131,7 +92,7 @@ class Intepreter(object):
 
     def __tokenizer(self, source_code: str) -> list:
         """ create a list of tokens """
-        source_code = '(begin' + source_code + ')'
+        source_code = '(begin(' + source_code + '))'
         return source_code.replace('(', ' ( ').replace(')', ' ) ').split()
 
     def parse(self, source_code: str) -> Exp:
@@ -140,6 +101,7 @@ class Intepreter(object):
 
     def __parse_parenthesis(self, tokens: list) ->Exp:
         """ parse one expression within parethesis """
+
         if len(tokens) == 0:
             raise SyntaxError('unexpected EOF')
 
@@ -153,11 +115,10 @@ class Intepreter(object):
             while tokens[0] != ')':
                 expression.append(self.__parse_parenthesis(tokens))
             tokens.pop(0)
-            return expression
 
+            return expression
         elif token == ')':
             raise SyntaxError(') mismatched')
-
         else:
             return Intepreter.atom(token)
 
@@ -171,58 +132,70 @@ class Intepreter(object):
         if isinstance(x, Symbol):
             try:
                 return env.find(x.val)[x.val]
+
             except KeyError:
                 print('Unbounded variable ' + x.val)
+            except TypeError:
+                print('Unbounded variable')
         
         # constant number
         elif not isinstance(x, List):
             return x.val
 
         # parse list =================
-        op, *args = x
-        if op.val == 'qoute':
-            return args[0].val
+        try:
+            op, *args = x
+            if not args:
+                return self.eval(op)
 
-        # condition
-        elif op.val == 'if':
-            (test, conseq, alt) = args
-            exp = (conseq if self.eval(test, env)  else alt)
-            return self.eval(exp, env)
+            if op.val == 'quote':
+                return args[0].val
 
-        elif op.val == 'define':
-            (symbol, exp) = args
-            env[symbol.val] = self.eval(exp, env)
+            # condition
+            elif op.val == 'if':
+                (test, conseq, alt) = args
+                exp = (conseq if self.eval(test, env)  else alt)
+                return self.eval(exp, env)
 
-        elif op.val == 'set!':
-            (symbol, exp) = args
-            env.find(symbol.val)[symbol.val] = self.eval(exp, env)
+            elif op.val == 'define':
+                (symbol, exp) = args
+                env[symbol.val] = self.eval(exp, env)
 
-        # generate procedure
-        elif op.val == 'lambda':
-            (parms, body) = args
-            return Procedure(parms, body, env)
+            elif op.val == 'set!':
+                (symbol, exp) = args
+                env.find(symbol.val)[symbol.val] = self.eval(exp, env)
 
-        # procedure call
-        else:
-            proc = self.eval(op, env)
+            # generate procedure
+            elif op.val == 'lambda':
+                (parms, body) = args
+                return Procedure(parms, body, env)
 
-            vals = List(self.eval(arg, env) for arg in args)
-            
-            # user defined procedures. proc(*vals) return the argument for eval
-            if isinstance(self.env.find(op.val)[op.val], Procedure):
-                sub_exp, sub_env = proc(*vals)
-                return self.eval(sub_exp, sub_env)
-            # build-in procedures
-            return proc(*vals)
+            # procedure call
+            else:
+                proc = self.eval(op, env)
+
+                vals = List(self.eval(arg, env) for arg in args)
+                
+                # user defined procedures. proc(*vals) return the argument for eval
+                if isinstance(self.env.find(op.val)[op.val], Procedure):
+                    sub_exp, sub_env = proc(*vals)
+                    return self.eval(sub_exp, sub_env)
+
+                # build-in procedures
+                return proc(*vals)
+        except TypeError as e:
+            print(e)
 
     @staticmethod
     def atom(token: str) -> Atom:
         """ method to transfer token from str to Number or Symbol """
         try:
             return Number(int(token))
+
         except ValueError:
             try:
                 return Number(float(token))
+
             except ValueError:
                 return Symbol(token)
    
@@ -230,11 +203,23 @@ class Intepreter(object):
         """repl interactive shell"""
         while True:
             typein = input(prompt)
+
             if typein in ['q', 'exit', 'quit']:
                 sys.exit(0)
             val = self.eval(self.parse(typein))
 
-            if val == None:
-                pass
-            else:
-                print(val)
+            if val == None:pass
+            else: print(val)
+
+    def run(self, filename):
+        """ run code in a seperate file """
+        try:
+            fp = open(filename, 'r')
+            line = fp.readline()
+            while line:
+                val = self.eval(self.parse(line))
+            if val == None:pass
+            else: print(val)
+
+        except IOError as e:
+            print(e)

@@ -1,6 +1,6 @@
-# LLisp a scheme toy language
+# LLisp ---a scheme toy language
 
-### Another scheme dialect. Partially support scheme's basic functionality, while provide a extendable interface for customizable environment. 
+Another scheme dialect. Partially support scheme's basic functionality, while provide a extendable interface for customizable environment.
 
 ## features
 
