@@ -51,3 +51,10 @@ def extend_env(env: dict) -> FunctionType:
             })        
         return env
     return foo
+
+def pylib_env_dict(*args) -> dict:
+    """ return a dict of given libs """
+    env = {}
+    for lib in args:
+        env.update(vars(lib))
+    return env

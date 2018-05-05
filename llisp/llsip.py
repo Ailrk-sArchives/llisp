@@ -225,13 +225,16 @@ class Intepreter(object):
                 return Number(float(token))
             except ValueError:
                 return Symbol(token)
-    
+   
     def repl(self, prompt='>'):
-        """ repl interactive shell"""
+        """repl interactive shell"""
         while True:
             typein = input(prompt)
-            if typein in ['q', 'exit', 'quit']: sys.exit(0)
-
+            if typein in ['q', 'exit', 'quit']:
+                sys.exit(0)
             val = self.eval(self.parse(typein))
-            if val:
+
+            if val == None:
+                pass
+            else:
                 print(val)

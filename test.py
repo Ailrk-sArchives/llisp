@@ -1,9 +1,6 @@
-from llisp import Llisp, create_env, extend_env
+from llisp import Llisp, extend_env, pylib_env_dict
+import matplotlib.pyplot as plt
+import numpy as np
 
-env = {
-        'print_a': print,
-        'priny_b': lambda x: x*x*x,
-        }
-
-llisp = Llisp(extend_env(env))
+llisp = Llisp(extend_env(pylib_env_dict(plt, np)))
 llisp.repl()
