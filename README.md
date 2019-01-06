@@ -2,13 +2,13 @@
 
 Another scheme dialect. Partially support scheme's basic functionality, while provide a extendable interface for customizable environment.
 
-## features
+## Features
 
 * Support lambda expression.
 * Provide a repl shell.
 * Provide application interface for customized built-in functions.
 
-## how to use
+## How to use
 
 - import customized environment to llist
 
